@@ -1,10 +1,44 @@
+/*
+ * Copyright 2017-2018 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
+ */
+
+// Configures publishing of Maven artifacts to Bintray
+
+
 plugins {
     id 'org.jetbrains.kotlin.jvm' version '1.3.21'
     id "com.jfrog.bintray" version "1.8.4"
 }
 
+apply plugin: 'maven'
+apply plugin: 'maven-publish'
+
 group 'ru.yoldi.ktor'
-version '1.0-SNAPSHOT'
+
+
+
+ext.nextVersion = {
+    def versionPropsFile = file('version.properties')
+
+    if (versionPropsFile.canRead()) {
+        Properties versionProps = new Properties()
+
+        versionProps.load(new FileInputStream(versionPropsFile))
+
+        def code = versionProps['VERSION_CODE'].toInteger() + 1
+
+        versionProps['VERSION_CODE']=code.toString()
+        versionProps.store(versionPropsFile.newWriter(), null)
+
+        return code
+    }
+    else {
+        throw new GradleException("Could not read version.properties!")
+    }
+}
+
+version '0.1.' + nextVersion()
+
 
 repositories {
     mavenCentral()
@@ -14,6 +48,7 @@ repositories {
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
 
+    compile "io.ktor:ktor-locations:$ktor_version"
 
     testCompile("org.junit.jupiter:junit-jupiter-api:5.4.1")
     testRuntime("org.junit.jupiter:junit-jupiter-engine:5.4.1")
@@ -26,14 +61,105 @@ compileTestKotlin {
     kotlinOptions.jvmTarget = "1.8"
 }
 
-bintray {
-    user = 'enchantinggg4'
-    key = '572c321fd6e1cda585d213d55baa7615ba9b60b4'
+def pomConfig = {
+    licenses {
+        license {
+            name "The Apache Software License, Version 2.0"
+            url "https://www.apache.org/licenses/LICENSE-2.0.txt"
+            distribution "repo"
+        }
+    }
+    developers {
+        developer {
+            id "JetBrains"
+            name "JetBrains Team"
+            organization "JetBrains"
+            organizationUrl "https://www.jetbrains.com"
+        }
+    }
+    scm {
+        url "https://github.com/Kotlin/atomicfu"
+    }
+}
 
+project.ext.configureMavenCentralMetadata = {
+    def root = it.asNode()
+    // NOTE: Don't try to move top-level things (especially "description") to the pomConfig block
+    //       because they would resolve incorrectly to top-level project properties in Gradle/Groovy
+    root.appendNode('name', project.name)
+    root.appendNode('description', 'AtomicFU utilities')
+    root.appendNode('url', 'https://github.com/Kotlin/atomicfu')
+    root.children().last() + pomConfig
+}
+
+
+// todo: figure out how we can check it in a generic way
+
+// ------------- tasks
+
+// workaround for tasks created by native plugin
+task sourcesJar(type: Jar) {
+    classifier = 'sources'
+    from "src/main/kotlin"
+}
+
+// empty xxx-javadoc.jar
+task javadocJar(type: Jar) {
+    classifier = 'javadoc'
+    from "$buildDir/javadoc" // would not exist
+}
+task stubSources(type: Jar) {
+    classifier = 'sources'
+}
+
+task stubJavadoc(type: Jar) {
+    classifier = 'javadoc'
+}
+
+publishing {
+//    repositories {
+//        maven { url = 'https://kotlin.bintray.com/kotlinx' }
+//    }
+    publications.all {
+        pom.withXml(configureMavenCentralMetadata)
+    }
+
+    publications {
+        maven(MavenPublication) {
+            from components.java
+            artifact sourcesJar
+            artifact javadocJar
+
+            if (project.name.endsWith("-maven-plugin")) {
+                pom.packaging = 'maven-plugin'
+            }
+        }
+    }
+}
+
+bintray {
+    user = "enchantinggg4"
+    key = "572c321fd6e1cda585d213d55baa7615ba9b60b4"
     pkg {
         repo = 'ktor-swagger'
-        name = 'ktor-swagger'
+        name = 'swagger-generator'
         licenses = ['Apache-2.0']
-//        vcsUrl = 'https://github.com/bintray/gradle-bintray-plugin.git'
+        vcsUrl = 'https://github.com/enchantinggg4/ktor-swagger.git'
+        version {
+            name = project.version
+            vcsTag = project.version
+            released  = new Date()
+        }
+    }
+}
+
+// TODO :kludge this is required for K/N publishing
+bintrayUpload.dependsOn publishToMavenLocal
+
+// This is for easier debugging of bintray uploading problems
+bintrayUpload.doFirst {
+    publications = project.publishing.publications.findAll { !it.name.contains('-test') }.collect {
+        println("Uploading artifact '$it.groupId:$it.artifactId:$it.version' from publication '$it.name'")
+        it.name
     }
 }

@@ -1,7 +1,5 @@
 package ru.yoldi.ktor.swagger
 
-import com.fasterxml.jackson.annotation.JsonInclude
-import com.fasterxml.jackson.databind.ObjectMapper
 import io.ktor.application.*
 import io.ktor.locations.KtorExperimentalLocationsAPI
 import io.ktor.locations.get
@@ -37,9 +35,8 @@ annotation class PathParam
 
 annotation class Description(val description: String)
 
-data class Pet(val id: Int, val name: String)
 
-
+@Suppress("unused")
 class SwaggerInstance {
     private val swagger = Swagger()
 
@@ -88,9 +85,11 @@ class SwaggerInstance {
             pipeline.intercept(ApplicationCallPipeline.Call) {
 
                 if (call.request.path() == configuration.path) {
-                    val some = ObjectMapper().also { it.setSerializationInclusion(JsonInclude.Include.NON_NULL) }
-                        .writeValueAsString(instance.swagger)
-                    call.respond(some)
+                    if (configuration.swaggerTransform != null) {
+                        call.respond(configuration.swaggerTransform!!.invoke(instance.swagger))
+                    } else {
+                        call.respond(instance.swagger)
+                    }
                 }
             }
 
@@ -190,7 +189,7 @@ class SwaggerInstance {
         }
 
 
-        inline fun<reified T: Any> produceObjectSchema(): Schema {
+        inline fun <reified T : Any> produceObjectSchema(): Schema {
             val f = FieldDescriptor.obj(T::class)
             return Schema(
                 f.type,
@@ -198,7 +197,7 @@ class SwaggerInstance {
             )
         }
 
-        inline fun<reified C: Any> produceListSchema(): Schema {
+        inline fun <reified C : Any> produceListSchema(): Schema {
             val f = FieldDescriptor.list(C::class)
             return ListSchema(
                 f.type,
@@ -211,5 +210,6 @@ class SwaggerInstance {
     class SwaggerConfiguration {
         var info: Information? = null
         var path: String? = "/swagger.json"
+        var swaggerTransform: ((Swagger) -> Any)? = null
     }
 }
