@@ -1,0 +1,39 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version '1.3.21'
+    id "com.jfrog.bintray" version "1.8.4"
+}
+
+group 'ru.yoldi.ktor'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+    jcenter()
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+
+
+    testCompile("org.junit.jupiter:junit-jupiter-api:5.4.1")
+    testRuntime("org.junit.jupiter:junit-jupiter-engine:5.4.1")
+}
+
+compileKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
+compileTestKotlin {
+    kotlinOptions.jvmTarget = "1.8"
+}
+
+bintray {
+    user = 'enchantinggg4'
+    key = '572c321fd6e1cda585d213d55baa7615ba9b60b4'
+
+    pkg {
+        repo = 'ktor-swagger'
+        name = 'ktor-swagger'
+        licenses = ['Apache-2.0']
+//        vcsUrl = 'https://github.com/bintray/gradle-bintray-plugin.git'
+    }
+}
